@@ -1,0 +1,196 @@
+---
+title: "Predictive Analytics - Regression"
+author: "Kaia Huang"
+date: "2026-02-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+- Regression Analysis to predict Boston House prices.
+
+```{r}
+# 1. Read the Boston House prices file.
+housing <- read.csv("06_Regression_Boston_Housing_Prices.csv")
+head(housing)
+```
+
+```{r}
+summary(housing)
+```
+
+-Mean value (avarage) of Age of all the houses
+```{r}
+mean(housing$AGE, na.rm = TRUE)
+```
+
+- Data Cleaning (Replace missing values with 0's)
+```{r}
+library(tidyverse)
+housing$AGE <- replace_na(housing$AGE, 0)
+housing$CRIM <- replace_na(housing$CRIM, 0)
+housing$ZN <- replace_na(housing$ZN, 0)
+housing$INDUS <- replace_na(housing$INDUS, 0)
+housing$CHAS <- replace_na(housing$CHAS, 0)
+housing$LSTAT <- replace_na(housing$LSTAT, 0)
+```
+
+- Re-verify the mean value of age
+
+```{r}
+mean(housing$AGE, na.rm = TRUE)
+```
+- Multicollinearity: Correlation between Independent variables
+- Correlation should be there between Independent variables and dependent variables
+
+```{r}
+library(ggcorrplot) 
+# Correlation analysis between IVs and DVs 
+
+correlation_matrix <- cor(housing) 
+
+# ?ggcorrplot() 
+
+ggcorrplot(correlation_matrix, 
+           method = "square", 
+           lab = T, 
+           digits = 1, 
+           type = "lower" ) 
+
+```
+
+
+```{r}
+# 2. Training and Test split ---- 
+# Sometimes validation sample is also used. 
+#Use 70% data for training, 10% data for validation, 20% data for testing 
+
+set.seed(1234) 
+train_test_vector <- sample(c("Training", "Testing"), nrow(housing), replace = T, prob = c(0.7, 0.3)) 
+
+# Create train dataset 
+
+train <- housing[train_test_vector == "Training", ] 
+
+# Create test dataset 
+
+test <- housing[train_test_vector == "Testing", ] 
+```
+
+
+ - creat the model and summarize the model for coefficients
+```{r}
+# Select best model statistically by using the Adjusted R-Square 
+lm_model <- lm(MEDV~., data=train) 
+summary(lm_model) 
+```
+ 
+ 
+ - pick the best model using step-eise regression
+```{r}
+min_model <- lm(MEDV~1, data = train) 
+
+max_model <- step(min_model,  
+                  scope=(~ CRIM + ZN + INDUS + CHAS + NOX +  
+
+                      RM + AGE + DIS + RAD + TAX + PTRATIO + B + LSTAT), 
+
+                  direction = "forward", 
+
+                  trace = 1) 
+
+summary(max_model) 
+```
+ 
+ 
+ - capture Traning Error from the generated model
+```{r}
+#Setp 6: capture the training error (MSE)-. degree of freedom  
+Training_Error <- sum((max_model$residuals)^2)/nrow(train)  
+Training_Error 
+```
+ 
+ - Make predictions
+```{r}
+predictions <- predict(max_model,test[c(-14)]) # remove the actual outcome variable  # check data set and remove the column number e.g price of house   
+
+test$Predicted_Output <- predictions  
+
+testing_Error <-test$MEDV - test$Predicted_Output  
+
+Testing_Error <- sum(testing_Error^2)/length(testing_Error)  
+
+Testing_Error 
+
+rmse_test <- sqrt(Testing_Error)
+rmse_test
+```
+ 
+```{r}
+library(caret) 
+training_params <- trainControl(method = "repeatedcv",  
+
+             number = 10, 
+
+             repeats = 5, 
+
+             verboseIter = T 
+
+             ) 
+
+# ?train() # multiple models, linear reg, logistic, SVM,  
+
+model_lm1 <- train(MEDV ~.,  
+
+                   data = train,  
+
+                   method = "lm", 
+
+                   trControl = training_params) 
+
+summary(model_lm1) 
+```
+```{r}
+library(car)
+vif(max_model)
+```
+ 
+ 
+# There is no serial correlation between independent variables.
+# vif – to check correlation.  
+# The Variance Inflation Factor (VIF) measures how much the variance of an estimated regression coefficient is increased due to multicollinearity (correlation) among predictor variables 
+# If VIF for a variable is 1, then it is not having any serial correlation with other IVs 
+# 5 is acceptable 
+# 10 should be absolutely avoided. 
+ 
+```{r}
+# Ridge Regression  
+
+ridge_model <- train(MEDV ~.,  
+               data =  train, 
+               method = 'glmnet', 
+               tuneGrid = expand.grid(alpha = 0,  
+                                      lambda = seq(0, 5, length = 50)), # set alpha = 0 , lambda = 0 to 5 and set of 50  
+                trControl = training_params) 
+```
+
+```{r}
+ridge_model$bestTune 
+```
+ 
+```{r}
+prediction <- predict(ridge_model,test[c(-14)])
+head(predictions)
+```
+```{r}
+testing_Error <-predictions - test$MEDV 
+Testing_Error <- sum(testing_Error^2)/length(testing_Error)  
+Testing_Error 
+
+rmse_test <- sqrt(Testing_Error)
+rmse_test
+```
+ 
+ 

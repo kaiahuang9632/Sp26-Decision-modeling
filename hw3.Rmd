@@ -1,0 +1,189 @@
+---
+title: "03-Homework - Causal Analysis"
+author: "Kaia Huang"
+date: "2026-03-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(caret)
+```
+
+```{r}
+library(tidyr)     # Data cleaning (replace_na)
+library(ggcorrplot)# Correlation visualization
+library(car)       # For VIF calculation
+```
+
+```{r}
+library(glmnet)    # For Ridge and Lasso regression
+```
+
+```{r}
+# 1. Read and Clean Data ----
+file_name <- paste0(getwd(), "/train.csv")
+housing <- read.csv("train.csv")
+```
+
+```{r}
+# Oberserve how many numeric colums have missing value.
+summary(housing)
+```
+
+```{r}
+library(tidyr)
+library(dplyr)
+
+#Identify how many missing values do character columns have.
+
+housing %>%
+  select(where(is.character))  %>% # Focus only on text columns
+  summarise(across(everything(), ~ sum(is.na(.))))  %>% # Count NAs for each
+  pivot_longer(cols = everything(), names_to = "Column_Name", values_to = "NA_Count") %>%
+  filter(NA_Count > 0) # Only show columns that have NAs 
+```
+
+```{r}
+# More than 50% (large number of rows have missing values in Alley column) so I droped the column, and ID doesn't really have strong correlation with hosing price so I droped it as well.
+housing <- housing %>% 
+  select(c(-Id, -Alley))
+```
+
+
+- Use below code for mass replace with no value at all like ""
+```{r}
+#other category columns are important so I'm not going to drop them. In additional, I can't replace NA with the most frequent words, otherwise it would changed the hosing data. 
+housing <- housing %>% 
+  mutate(
+    # Handle Character columns: Replace NA with an empty string or "None" or "Unknown"
+    across(where(is.character), ~replace_na(., "Unknown")) 
+  ) 
+```
+
+```{r}
+# Identify numeric column and replace missing values.
+#LotFrontage replaced with median because the median is more resistant to interference than the mean; it isn't skewed by extreme high or low values.
+housing$LotFrontage   <- replace_na(housing$LotFrontage, 69.00)
+#MasVnrArea replaced with median 103.7 because the median is more resistant to interference than the mean; it isn't skewed by extreme high or low values.In addition, the input number needs to be integer so I change it to 104
+housing$MasVnrArea     <- replace_na(housing$MasVnrArea, 104)
+#MasVnrArea replaced with mean 1979 because the high or low values are not extremely wide.
+housing$GarageYrBlt  <- replace_na(housing$GarageYrBlt, 1979)
+```
+
+```{r}
+#double check numeric column's NA are all inputed.
+summary(housing)
+```
+```{r}
+library(tidyr)
+library(dplyr)
+
+# Double check if all NA of character columns are all replaced.
+
+housing %>%
+  select(where(is.character))  %>% # Focus only on text columns
+  summarise(across(everything(), ~ sum(is.na(.))))  %>% # Count NAs for each
+  pivot_longer(cols = everything(), names_to = "Column_Name", values_to = "NA_Count") %>%
+  filter(NA_Count > 0) # Only show columns that have NAs 
+```
+
+```{r}
+# 2. Training and Test Split ----
+set.seed(1234) # For reproducibility
+train_test_vector <- sample(c("Training", "Testing"), 
+                            nrow(housing), 
+                            replace = TRUE, 
+                            prob = c(0.8, 0.2))
+
+train <- housing[train_test_vector == "Training", ]
+test  <- housing[train_test_vector == "Testing", ]
+```
+
+```{r}
+# 4. d) Lasso Regression (Alpha = 1)
+# Can shrink coefficients to zero (Feature Selection).
+set.seed(1234)
+# Set up 10-fold Cross-Validation
+training_params <- trainControl(method = "repeatedcv", 
+                                number = 10, repeats = 5, 
+                                verboseIter = FALSE)
+lasso_model <- train(SalePrice ~ ., data = train, method = "glmnet",
+                     tuneGrid = expand.grid(alpha = 1, 
+                                            lambda = seq(0.001, 5000, length = 100)),
+                     trControl = training_params)
+```
+
+
+```{r}
+lasso_model$bestTune
+```
+
+```{r}
+best_lambda <- lasso_model$bestTune$lambda
+lasso_coefs <- coef(lasso_model$finalModel, s = best_lambda)
+ 
+lasso_coefs <- as.matrix(lasso_coefs)
+lasso_coeffs <- as.data.frame(lasso_coefs)
+names(lasso_coeffs) <- "coeff_values"
+selected_predictors  <- lasso_coeffs %>%
+  filter(coeff_values > 0)
+ 
+print(selected_predictors)
+# These selected variables (including the dummy 
+```
+
+```{r}
+# 4. a) Stepwise Regression (Forward Selection)
+min_model <- lm(SalePrice ~ 1, data = train)
+max_model <- step(min_model, 
+                  scope = (~ LotArea + LotShape + LandContour + LotConfig + Neighborhood +  Condition1 + OverallQual + OverallCond + YearBuilt + YearRemodAdd + RoofMatl + Exterior1st + Exterior2nd + MasVnrArea + Foundation + BsmtCond + BsmtExposure + BsmtFinType1 + BsmtFinSF1 + BsmtFinType2 + TotalBsmtSF + X1stFlrSF + BsmtFullBath + FullBath + Fireplaces + GarageYrBlt + GarageCars + GarageArea + GarageQual + WoodDeckSF + OpenPorchSF + ScreenPorch + PoolArea + SaleType + SaleCondition),
+                  direction = "forward", trace = 0)
+```
+
+```{r}
+# 4. c) Ridge Regression (Alpha = 0)
+# Penalizes large coefficients to handle multicollinearity.
+
+set.seed(1234)
+ridge_model <- train(SalePrice ~ ., data = train, method = "glmnet",
+                     tuneGrid = expand.grid(alpha = 0, 
+                                            lambda = seq(0, 5, length = 50)),
+                     trControl = training_params)
+```
+
+```{r}
+# 5. Model Comparison ----
+# Including the basic lm() model. Recreated for caret package standards.
+lm_model <- train(SalePrice ~ ., 
+                        data = train, 
+                        method = "lm", 
+                        trControl = training_params)
+
+# Compare RMSE and R-squared from the training phase
+results <- resamples(list(Linear = lm_model, Ridge = ridge_model, Lasso = lasso_model))
+summary(results)
+```
+
+```{r}
+# Final performance check on the unseen TEST data
+pred_linear <- predict(lm_model, test)
+pred_ridge  <- predict(ridge_model, test)
+pred_lasso  <- predict(lasso_model, test)
+
+# Function to calculate RMSE for comparison
+calc_rmse <- function(actual, predicted) { sqrt(mean((actual - predicted)^2)) }
+
+# Result Table
+comparison_table <- data.frame(
+  Model = c("Linear", "Ridge", "Lasso"),
+  RMSE  = c(calc_rmse(test$SalePrice, pred_linear),
+            calc_rmse(test$SalePrice, pred_ridge),
+            calc_rmse(test$SalePrice, pred_lasso))
+)
+print(comparison_table)
+```
+

@@ -1,0 +1,105 @@
+---
+title: "Assignment - 07 - Simulating Roadside Assistance Requests"
+author: "Kaia Huang"
+date: "2026-04-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### Justification for Using Poisson Distribution
+
+Independence of Events: Each request for roadside assistance is an independent event. For example, getting a flat tire today does not change the probability of having a dead battery in the future.
+
+Counting Occurrences: The Poisson distribution is ideal because we are counting the specific number of times a claim occurs within a fixed time interval (one year). In this scenario, we can only count the events that "happen," as it is impossible to count how many times an event did "not happen".
+
+Randomness and Rarity: Roadside claims happen purely by chance. Given that we have a specific average rate of 0.5 claims per year, this fits the characteristics of a Poisson model perfectly for simulating business uncertainty.
+
+```{r Q2. normal_distribution}
+set.seed(123)  # Create a vector of 20 random numbers following a Poisson distribution with a mean (lambda) of 0.5. Name this vector simulated_claims. This represents the annual number of roadside assistance requests for a sample of 20 customers. 
+num_samples <- 20
+avg_claims <- 0.5         # lambda 
+total_repair_cost <- 100  # Cost of repair through 3rd party 
+agency_pay_ratio <- 0.5   # The insurance agency pays 50% cost to 3rd party per roadside assistance repair. 
+
+# simulate 20 samples (for 0 to 19 claims) 
+simulated_claims <- rpois(n = 20, lambda = 0.5) 
+
+df_claims <- data.frame(claims = simulated_claims)
+
+# Approach - 1
+# Use base plot ()
+sorted_claims <- sort(simulated_claims)
+print(head(sorted_claims))
+
+density_sample <- dpois(sorted_claims, lambda = 0.5)
+plot(x = sorted_claims, 
+     y = density_sample, 
+     type = 'h', 
+     main = "Poisson Distribution (lambda = 0.5)",
+     xlab = "Number of Claims",
+     ylab = "Probability")
+points(x = sorted_claims, y = density_sample, pch = 16)
+
+
+# Approach - 2
+# Use geom_density (No need to calculate the densities separately)
+library(ggplot2)
+df_claims <- data.frame(claims = simulated_claims) +
+   ggplot(df_claims, aes(x = claims)) +
+  geom_bar(aes(y = ..prop..), fill = "skyblue", color = "black", width = 0.5) +
+  labs(title = "Simulated Roadside Assistance Claims",
+       x = "Number of Claims per Year",
+       y = "Proportion of Customers") +
+  theme_minimal()
+
+```
+
+```{r}
+# Option 1: The insurance agency only charges a premium. 
+# Assumptions:  1. Cost of repair through 3rd party is $100  2. Insurance premium is $50 per annum for roadside assistance.  3. The insurance agency pays 50% cost to 3rd party per roadside assistance repair.  4. Average number of claims for roadside assistance is 0.5 
+premium1 <- 50 
+profit_opt1 <- premium1 - (simulated_claims * total_repair_cost * agency_pay_ratio)
+```
+
+```{r}
+# Option 2: The insurance agency charges a premium and a deductible.  
+# Assumptions:  1. Cost of repair through 3rd party is $100  2. Insurance premium is $25 per annum for roadside assistance.  3. There is a deductible of $25 per roadside assistance repair.  4. The insurance agency pays 50% cost to 3rd party per roadside assistance repair.  5. Average number of claims for roadside assistance is 0.5 
+premium2 <- 25
+deductible2 <- 25
+profit_opt2 <- premium2 + (simulated_claims * deductible2) - 
+               (simulated_claims * total_repair_cost * agency_pay_ratio)
+```
+
+```{r}
+# Option 3: The insurance agency charges a premium, a deductible, and limits the number of roadside assistance repairs that the customers can raise per annum.
+# Assumptions:  1. Cost of repair through 3rd party is $100  2. Insurance premium is $25 per annum for roadside assistance.  3. There is a deductible of $25 per roadside assistance repair.  4.  The customer roadside assistance request will not be paid by the insurance agency after 2nd claim.  5. The insurance agency pays 50% cost to 3rd party per roadside assistance repair.  6. Average number of claims for roadside assistance is 0.5 
+
+# The customer roadside assistance request will not be paid by the insurance agency after 2nd claim. 
+premium3 <- 25 
+deductible3 <- 25 
+max_covered_claims <- pmin(simulated_claims, 2) 
+
+# Profit
+profit_opt3 <- premium3 + (simulated_claims * deductible3) - 
+               (max_covered_claims * total_repair_cost * agency_pay_ratio)
+```
+
+```{r}
+results <- data.frame(
+  Sample_ID = 0:19, 
+  Claims = simulated_claims,
+  Profit_Opt1 = profit_opt1,
+  Profit_Opt2 = profit_opt2,
+  Profit_Opt3 = profit_opt3
+)
+```
+
+```{r}
+# Expected Profit 
+expected_profits <- colMeans(results[, c("Profit_Opt1", "Profit_Opt2", "Profit_Opt3")])
+print(expected_profits)
+```
+

@@ -1,0 +1,323 @@
+---
+title: "10_Decision Making Through Probabilities"
+author: "<Include your name>"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### General Concept: Why Use Simulations?
+
+In the real world, we rarely have "perfect" data.
+
+- We use **Probability Distributions** to model how we expect nature or customers to behave.
+- We use **Simulations** to "play out" thousands of scenarios on a computer before spending actual money in a business.
+
+#### Probability and Simulations 
+
+> Data and its applications aren't always what they seem in an increasingly data-driven world. The purpose of this markdown document is to present two scenarios in which decision makers can use probability and simulations to gain insight into a business problem under uncertainty. The method can be applied to a wide range of business scenarios. For example, how can you forecast fraudulent activity through a new type of fraud when there have been no reported money losses in the past (New Fraud going on in the market)? 
+> How can you predict how many people will be resistant to bacterial infections in a country with a significant amount of missing national data? Or 
+> How about estimating how long it will take to evacuate people in flood-prone areas? In situations like these, approximations based on expert opinions are required to address complex decision-making problems. This markdown file will demonstrate the fundamentals of various techniques for framing a business context and quantifying uncertainty using expert opinion. 
+
+
+## Probability Distribution Functions 
+
+- Normal Distribution 
+
+**Q1. Please write in your own words what is the purpose of each of the below functions. **
+- rnorm() # Gererates random numbers from a distribution (normal in this case)
+- dnorm() # Height of the curve at the exact point of x. It is not probability, but we can interpret the density as how crowded is this x with respect to the rest of the distribution.
+- pnorm() 
+- qnorm() 
+
+
+```{r Q2. normal_distribution}
+set.seed(1234)
+# Create a vector of 1000 random normal numbers with a mean of 5 and standard deviation of 1.5. Name this as human_water_consumption. Assuming that this 1000 sample vector is taken from the global water consumption vector.  
+human_water_consumption <- rnorm(n = 1000, mean = 5, sd = 1.5)
+head(human_water_consumption)
+# Plot the normal distribution as a density plot (This should be nothing but a bell curve!)
+
+# Approach - 1
+# Use base plot ()
+sorted_water_consumption <- sort(human_water_consumption)
+print(head(sorted_water_consumption))
+
+density_sample <- dnorm(sorted_water_consumption,
+                        mean=5,
+                        sd = 1.5)
+head(density_sample)
+plot(x = sorted_water_consumption,
+     y = density_sample,
+     type = 'l')
+
+# Approach - 2
+# Use geom_density (No need to calculate the densities separately)
+library(ggplot2)
+ggplot(data.frame(x = human_water_consumption)) +
+   geom_density(aes(x))
+
+```
+
+
+```{r Q3. Density_Value}
+# What is the global water consumption density for 1 liter of water? 
+x1 <- dnorm(x = 1, mean=5, sd=1.5)
+
+# What is the global water consumption density for 5 liters of water? 
+x2 <- dnorm(x = 5, mean=5, sd=1.5)
+
+# Which density value is high? Provide your interpretation. 
+ifelse(x1 > x2, "1 litre consumption is popular",
+       "5 litre consumption is popular")
+```
+
+
+```{r Q4. lower.tail_upper.tail}
+# What is the average water consumption of bottom 25% of population?  
+qnorm(0.25, mean = 5, sd = 1.5)
+
+# What is the average water consumption of top 25% of population?  
+qnorm(0.75, mean = 5, sd = 1.5)
+
+```
+
+```{r Q5. probability_of_drinking_n_liters}
+# What percentage of population drinks less than 2 liters of water a day?   
+pnorm(2, mean = 5, sd = 1.5)
+
+# What proportion of the population consumes 7 liters or more of water per day?
+1 - pnorm(7, mean = 5, sd = 1.5)
+
+```
+
+
+``` {r Q6. random_winning_rate_prediction}
+# Create a 100-person sample from a group of sports bettors predicting the number of titles Andy Murray will win in the next 10 tournaments. Assume that his current title-winning percentage is 0.25. Save the output to murray_win_rate and print the first 10 elements. 
+set.seed(1234)
+murray_titles <- rbinom(100, 10, 0.25)  
+head(murray_titles, 10)
+
+# Create a histogram using the murray_win_rate sample prediction. 
+hist(murray_titles, breaks = c(-1, 0, 1, 2, 3, 4, 5, 6, 7),
+     labels = T)
+
+```
+
+
+**Scenario:** You're stuck in traffic and become curious about how many cars typically pass a red light before it turns green. While waiting, you count the number of vehicles that go through the light for an extended period (let's say over a hundred days). On average, you observe that around five cars pass the light during each cycle.
+
+**A friend suggests something interesting:** They believe that if you randomly pick a red light cycle to observe, there's a high chance the number of cars passing through will be somewhere between a minimum of one car to a maximum of forty cars. They suggest the Poisson distribution might be a good way to model this situation.
+
+
+``` {r Q7. Poisson_Distribution}
+
+# Create a vector of sample sizes ranging from 1 to 40 incrementing by 1. 
+# Capture Poisson densities for these 40 samples. Hint: Use dpois() function. You need to pass the sample size and the sample mean of 5 cars. 
+possibilities <- seq(1, 40)
+densities <- dpois(possibilities, lambda = 5)
+
+# Draw the Poisson densities plot 
+plot(x = possibilities, y = densities, type = 'l')
+
+```
+
+
+``` {r Q8. Interpreting_Poisson_Densities}
+# Please provide interpretations for the below plots. 
+library(ggplot2)
+success_samples <- seq(1, 40, 1)
+densities_with_mean1 <- dpois(success_samples, 1)
+densities_with_mean5 <- dpois(success_samples, 5)
+densities_with_mean10 <- dpois(success_samples, 10)
+
+ggplot(data.frame(x=success_samples), aes(x)) +
+  geom_line(aes(y=densities_with_mean1), colour="red") +
+  geom_line(aes(y=densities_with_mean5), colour="blue") +
+  geom_line(aes(y=densities_with_mean10), colour="green")
+
+```
+
+
+
+**Scenario:** Imagine you're buying a batch of light bulbs, and the manufacturer claims they have an average lifespan of 1000 hours. You're interested in simulating how long each bulb might last before burning out.
+
+**The Exponential Fit:**
+
+The exponential distribution is a good fit for modeling lifespans of components like light bulbs because failures are random and independent events. The rate of failure increases as the bulb ages (although the model assumes a constant rate for simplicity).
+
+Using *rexp()* for Bulb Lifespans:
+
+The rate parameter represents the rate of bulb failure, which is inversely proportional to the average lifespan.
+
+```{r}
+# Average lifespan of the bulb (hours)
+average_lifespan <- 1000
+
+# Failure rate (lambda) - inverse of average lifespan
+failure_rate <- 1 / average_lifespan
+
+# Simulate lifespans for 200 bulbs
+bulb_lifespans <- rexp(n = 200, rate = failure_rate)
+
+# Print some lifespans (in hours)
+head(bulb_lifespans)
+```
+
+```{r}
+# Create the density plot
+ggplot(as.data.frame(bulb_lifespans)) +
+  geom_density(aes(x=bulb_lifespans), fill = "lightblue") +  
+  labs(title = "Bulb Lifespans - Density Plot",
+       x = "Lifespan (hours)",
+       y = "Density")
+```
+
+
+- **Inventory Management Problem** 
+
+> Kroger purchases perishable food items (meat products) for $27.50 per unit, then sells them for $40.00, making a profit of $12.50 on one pack of 10 lbs meat. However, if they do not sell the meat products by the best before quality deadlines, they can return the product for a $8.50 credit. The challenge in this case is that the inventory manager at the Kroger retailer store, want to determine how many packs of meat to order based on what the anticipated the level of demand to be. The experts at the store have captured the historical level of demand.
+
+
+Demand in tons | Probability | Cumulative Probability 
+---- | ---- | ----
+100 | 0.15 | 0
+150 | 0.24 | 0.15
+175 | 0.16 | 0.39 
+225 | 0.25 | 0.55 
+350 | 0.15 | 0.80 
+400 | 0.05 | 0.95 
+
+- The problem at hand is determining how many packs of meat should be ordered ahead of time to maximize profit. 
+- Use Monte Carlo Simulation to solve the problem. 
+
+```{r}
+inventory_data <- data.frame(demand = c(100, 150, 175, 225, 350, 400), 
+                             prob = c(0.15, 0.24, 0.16, 0.25, 0.15, 0.05), 
+                             lower_bound = c(0, 0.15, 0.39, 0.55, 0.80, 0.95), 
+                             upper_bound = c(0.15, 0.39, 0.55, 0.80, 0.95, 1) )   
+
+expected_value <- sum(inventory_data$demand * inventory_data$prob) 
+print(expected_value ) 
+```
+
+```{r}
+# Define possible demands and their probabilities 
+
+demands <- c(100, 150, 175, 225, 350, 400)
+probs <- c(0.15, 0.24, 0.16, 0.25, 0.15, 0.05) 
+
+# Simulate 10,000 days of demand 
+
+set.seed(1234)
+simulated_demand <- sample(demands, 
+                           size = 10000, 
+                           replace = TRUE, 
+                           prob = probs) 
+
+# function to calculate profit based on an 'order_quantity' 
+
+calc_profit <- function(order_qty, demand) { 
+  sold <- pmin(order_qty, demand) 
+  unsold <- pmax(0, order_qty - demand) 
+  # Profit = (Revenue - Cost) + (Refund for unsold) 
+  # OR simplified: (Sold * 12.50) - (Unsold * (27.50 - 8.50)) 
+
+profit <- (sold * 12.50) - (unsold * 19.00) 
+return(mean(profit)) 
+}
+
+```
+
+```{r}
+# Setting the order quantity 
+my_order_qty <- 207 
+
+# Calling the function 
+average_expected_profit <- calc_profit(order_qty = my_order_qty, demand = simulated_demand) 
+
+# Print the result 
+cat("For an order quantity of", my_order_qty, "packs, the expected average profit is: $", round(average_expected_profit, 2)) 
+```
+
+```{r}
+# Find Optimal val. 
+# 1. Create order quantities from 100 to 400 in multiples of 20 
+order_options <- seq(100, 400, by = 20) 
+
+# 2. Run the simulation for each order quantity 
+#We use an anonymous function to pass the simulated_demand into your calc_profit 
+expected_profits <- sapply(order_options, function(q) calc_profit(q, simulated_demand)) 
+
+# 3. Combine into a DataFrame 
+profit_results <- data.frame( Order_Quantity = order_options, Average_Profit = round(expected_profits, 2) ) 
+
+# 4. Print the final DataFrame 
+print(profit_results) 
+
+# 5. Find the absolute best one in this list 
+best_order <- profit_results[which.max(profit_results$Average_Profit), ] 
+
+cat("\n--- Optimization Result ---\n") 
+cat("The best order quantity is", best_order$Order_Quantity, "with an expected profit of $", best_order$Average_Profit) 
+```
+
+```{r}
+set.seed(1234) 
+n_simulations <- 10000 
+
+# 1. Define the ranges (mins and maxes) and their probabilities 
+
+ranges <- list( 
+  c(0, 100),   # 15% 
+  c(100, 150), # 24% 
+  c(150, 175), # 16% 
+  c(175, 225), # 25% 
+  c(225, 350), # 15% 
+  c(350, 400)  # 5% 
+) 
+
+probs <- c(0.15, 0.24, 0.16, 0.25, 0.15, 0.05) 
+
+# 2. Randomly assign each of the 10,000 simulations to a range index (1 through 6) 
+
+range_indices <- sample(1:length(ranges), size = n_simulations, replace = TRUE, prob = probs) 
+
+# 3. For each index, generate a random number within that specific min/max 
+
+simulated_demand_range <- sapply(range_indices, function(i) { 
+  round(runif(1, min = ranges[[i]][1], max = ranges[[i]][2]) ,0)
+}) 
+
+# 4. View the distribution 
+
+hist(simulated_demand_range, breaks = 40, col = "lightgreen",  
+     main = "Simulated Demand (Piecewise Uniform)",  
+     xlab = "Demand in Tons") 
+```
+
+```{r}
+# Find Optimal val. 
+# 1. Create order quantities from 100 to 400 in multiples of 20 
+order_options <- seq(100, 400, by = 20) 
+
+# 2. Run the simulation for each order quantity 
+#We use an anonymous function to pass the simulated_demand into your calc_profit 
+expected_profits <- sapply(order_options, function(q) calc_profit(q, simulated_demand_range)) 
+
+# 3. Combine into a DataFrame 
+profit_results <- data.frame( Order_Quantity = order_options, Average_Profit = round(expected_profits, 2) ) 
+
+# 4. Print the final DataFrame 
+print(profit_results) 
+
+# 5. Find the absolute best one in this list 
+best_order <- profit_results[which.max(profit_results$Average_Profit), ] 
+
+cat("\n--- Optimization Result ---\n") 
+cat("The best order quantity is", best_order$Order_Quantity, "with an expected profit of $", best_order$Average_Profit) 
+```
+

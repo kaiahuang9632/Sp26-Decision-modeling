@@ -1,0 +1,189 @@
+---
+title: "Decision Tree - In Class"
+author: Naga Vemprala
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE , warning=FALSE , message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### Create a decision tree on the HR data to predict employee
+
+```{r}
+library(rpart)
+library(rpart.plot)
+library(ggplot2)
+
+```
+
+> **Decision Trees**: Decision trees are considered to be an efficient way to make decisions or solve problems under uncertainty by evaluating each option based on the expected outcome and comparing options based on these expected outcomes. The final decision is usually based on a set of criteria and alternate paths available during the decision-making process. This can be applied to any situation with a simple outcome, such as yes/no, or a continuous output, such as how much money is involved. Decision trees are visual models that enable us to visually present all of the options associated with a problem and describe each option based on a probability value assigned to each choice outcome of a specific decision, including a group of related options. Each option’s value is determined by the probability value assigned to each expected outcome. The decision trees represent the relationship between choices and outcomes by drawing prospective decisions in a hierarchy. The decision tree is a branched flowchart that depicts multiple potential decision and outcome pathways.
+
+> **Decision Tree Structure**: The tree begins with a decision node (or root node), which indicates that a decision must be made. A branch is created from the decision node for each of the alternative choices under consideration. If the initial decision leads to another decision, a new decision node is created, and new branches are added to show each alternative pathway for the new decision. As a result, a series of decision pathways emerge. The flowchart may consist of only one or two decisions with one or two alternatives, or it may consist of a complex sequence of many decisions with many alternatives at each node.
+
+> **Problem Addressed in the decision tree**: In this markdown example, we attempt to look from the perspective of an employee to determine what decision the employee at an organization would make based on the current situation. How likely is it that the employee will continue to work for the organization based on historical data?
+
+```{r load data}
+hr <- read.csv("11_HR_comma_sep.csv")
+hr$left <- ifelse(hr$left == 1, "left", "not_left")
+
+```
+
+##### Exploratory Data Analysis
+```{r plot some random samples}
+set.seed(1234)
+random_sample <- sample(seq(1, nrow(hr)),20)
+hr_sample <- hr[random_sample, ]
+ggplot(hr_sample) +
+  geom_point(aes(x= satisfaction_level, 
+                 y= last_evaluation,
+                 col= left),
+             ) +
+  geom_vline(xintercept = 0.30, 
+             col = "purple",
+             linewidth = 1)
+
+```
+
+#### Calculate the gini impurity for the 20 data sample
+
+```{r}
+class_probs <- c(0.4,0.6)
+gini_impurity <- 1 - sum(class_probs^2)
+gini_impurity
+```
+
+> **Gini Impurity**
+
+- A measurement used to build Decision Trees to determine how the features of a dataset should split nodes to form the tree.
+- The range of Gini impurity can be calculated by this formula: [0, 1-(1/n)] ,where n is the number of classes. For binary classification, the maximum value possible for a Gini coefficient is 0.5. Lower is better.
+- Lower value for the impurity is desired. If the gini impurity is 0.5 in the case of binary classification, then there is equal impurity in both the classes of 0.5 and the values are evenly distributed across features.
+
+> In decision modeling, Entropy and Gini Impurity are both metrics used to measure "disorder" or "impurity" in a dataset.
+> In Neural Networks, we use Cross-Entropy Loss. It doesn't just care if the model is right or wrong; it cares how confident it was. If the model predicts a 99% probability of insurance but the person actually doesn't have it, the "loss" penalty is much higher than if it had predicted 51%.
+
+**Entropy**  
+Entropy comes from Information Theory (Shannon Entropy). It measures the average amount of "information" or "surprise" produced by the set of outcomes.
+
+$$Entropy = - \sum_{i=1}^{n} p_i \log_2(p_i)$$
+Loss function. (Highest loss leads to large entropy value)
+Cross-entropy in Neural Networks.
+
+- Max Value: 1.0 (for binary classification).  
+- Computation: Slower (requires logarithmic calculations).
+
+- Function to compute Gini Impurity
+
+#### implement Decision Tree using rpart
+```{r}
+set.seed(1234)
+train_test <- sample(c(0,1), nrow(hr), 
+                     prob = c(0.8,0.2),
+                     replace = TRUE)
+hr_train <- hr[train_test == 0, ]
+hr_test <- hr[train_test == 1, ]
+```
+
+#### Create tree Model
+```{r}
+hr_tree <- rpart(left ~.,
+                 method = "class",
+                 data = hr_train)
+# Use the type and extra arguments to control how the decision tree should be drawn. 
+rpart.plot(hr_tree)
+```
+
+> The cp is a threshold used to prune the tree. Specifically, any split that does not improve the overall $R^2$ (or reduce the relative error) by at least the factor cp is not attempted. 
+A smaller cp (e.g., 0.001): Allows the tree to be very deep and complex. 
+This captures more detail but risks overfitting (modeling the noise).
+A larger cp (e.g., 0.1): Results in a smaller, simpler tree. 
+This is more interpretable but risks underfitting (missing the underlying pattern).
+
+```{r}
+printcp(hr_tree)
+```
+
+
+```{r}
+library(tidyr)
+library(dplyr)
+
+#First decision criteria
+hr_train %>%
+  filter(satisfaction_level<0.47) %>%
+  count(left)
+
+#second decision criteria
+hr_train %>%
+  filter((satisfaction_level<0.47) & (number_project <3)) %>%
+  count(left)
+
+```
+
+
+```{r}
+hr_tree1 <- rpart(left ~.,
+                 data = hr_train,
+                 method = "class",
+                 control = rpart.control(cp = 0.02))
+rpart.plot(hr_tree1)
+```
+
+
+```{r}
+printcp(hr_tree1)
+```
+
+
+```{r}
+predictions <- predict(hr_tree, hr_test, type = "class")
+head(predictions)
+```
+
+- The below code is irrelevant if outcome variable is not logical. 
+> predict_left <- ifelse(predictions[,1] > predictions[,2],1,0)
+  table(predict_left)
+
+```{r}
+#predict_left <- ifelse(predictions[,1] > predictions[,2],1,0)
+#table(predict_left)
+```
+
+
+```{r}
+hr_test$true_left <- ifelse(hr_test$left == "left",1,0)
+Confusion_matrix <- table(hr_test$left, predictions)
+Confusion_matrix
+```
+
+- compute the accuracy from confusion matrix
+
+```{r}
+Confusion_matrix <- as.data.frame(Confusion_matrix) 
+colnames(Confusion_matrix) <- c("true_outcome", 
+                               "predicted_outcome", 
+                               "frequency")
+Accuracy <- sum(Confusion_matrix[
+  Confusion_matrix$true_outcome == Confusion_matrix$predicted_outcome, "frequency"]) /
+  sum(Confusion_matrix$frequency)
+Accuracy
+```
+
+```{r}
+
+```
+
+```{r}
+這是可以開另一個檔案直接給公式叫他出list的code
+view(hr_test)
+hr_test$predicted_o <- predictions
+
+filtered_output <- hr_test[hr_test$left !=hr_test$predicted_o. ]
+nrow(filtered_output)
+view(filtered_output)
+
+
+table(hr_test)
+```
+
